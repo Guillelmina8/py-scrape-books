@@ -8,10 +8,10 @@ class BooksSpider(scrapy.Spider):
     name = "books"
 
     custom_settings = {
-        "CONCURRENT_REQUESTS": 32,
-        "DOWNLOAD_DELAY": 0,
-        "CONCURRENT_REQUESTS_PER_DOMAIN": 32,
-        "AUTOTHROTTLE_ENABLED'": False,
+        "CONCURRENT_REQUESTS": 16,
+        "DOWNLOAD_DELAY": 0.5,
+        "AUTOTHROTTLE_ENABLED": True,
+        "AUTOTHROTTLE_START_DELAY": 1,
     }
 
     start_urls = [
@@ -38,20 +38,22 @@ class BooksSpider(scrapy.Spider):
         main = response.css(".product_main")
 
         rating_map = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}
-        raw_rating = response.css(
-            "p.star-rating::attr(class)"
-        ).get().split()[-1]
+        rating_class = response.css("p.star-rating::attr(class)").get()
+        rating_text = rating_class.split()[-1] if rating_class else "Zero"
+
+        price_raw = main.css(".price_color::text").re_first(r"\d+\.\d+")
+        stock_raw = response.css(".availability::text").re_first(r"\d+")
 
         yield {
             "title": main.css("h1::text").get(),
-            "price":
-                float(main.css(".price_color::text").re_first(r"\d+\.\d+")),
-            "amount_in_stock":
-                int(response.css(".availability::text").re_first(r"\d+")),
-            "rating": rating_map.get(raw_rating, 0),
-            "category":
-                response.css(".breadcrumb li:nth-child(3) a::text").get(),
-            "description":
-                response.css("#product_description + p::text").get(),
-            "upc": response.css("th:contains('UPC') + td::text").get(),
+            "price": float(price_raw) if price_raw else 0.0,
+            "amount_in_stock": int(stock_raw) if stock_raw else 0,
+            "rating": rating_map.get(rating_text, 0),
+            "category": response.css(
+                ".breadcrumb li:nth-child(3) a::text").get(),
+            "description": response.css(
+                "#product_description + p::text").get(),
+            "upc": response.xpath(
+                "//th[text()='UPC']/following-sibling::"
+                "td[1]/text()").get(),
         }
