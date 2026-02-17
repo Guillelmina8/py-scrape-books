@@ -1,17 +1,21 @@
-from typing import Iterable, Any
+from typing import Iterable
 
 import scrapy
 from scrapy.http import Response
+
+from books.items import BooksItem
 
 
 class BooksSpider(scrapy.Spider):
     name = "books"
 
     custom_settings = {
-        "CONCURRENT_REQUESTS": 16,
+        "CONCURRENT_REQUESTS": 8,
         "DOWNLOAD_DELAY": 0.5,
         "AUTOTHROTTLE_ENABLED": True,
         "AUTOTHROTTLE_START_DELAY": 1,
+        "AUTOTHROTTLE_TARGET_CONCURRENCY": 1.0,
+        "AUTOTHROTTLE_MAX_DELAY": 60,
     }
 
     start_urls = [
@@ -34,7 +38,7 @@ class BooksSpider(scrapy.Spider):
             self,
             response: Response,
             **kwargs
-    ) -> Iterable[dict[str, Any]]:
+    ) -> Iterable[BooksItem]:
         main = response.css(".product_main")
 
         rating_map = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}
@@ -44,16 +48,16 @@ class BooksSpider(scrapy.Spider):
         price_raw = main.css(".price_color::text").re_first(r"\d+\.\d+")
         stock_raw = response.css(".availability::text").re_first(r"\d+")
 
-        yield {
-            "title": main.css("h1::text").get(),
-            "price": float(price_raw) if price_raw else 0.0,
-            "amount_in_stock": int(stock_raw) if stock_raw else 0,
-            "rating": rating_map.get(rating_text, 0),
-            "category": response.css(
-                ".breadcrumb li:nth-child(3) a::text").get(),
-            "description": response.css(
-                "#product_description + p::text").get(),
-            "upc": response.xpath(
-                "//th[text()='UPC']/following-sibling::"
-                "td[1]/text()").get(),
-        }
+        item = BooksItem()
+        item["title"] = main.css("h1::text").get()
+        item["price"] = float(price_raw) if price_raw else 0.0
+        item["amount_in_stock"] = int(stock_raw) if stock_raw else 0
+        item["rating"] = rating_map.get(rating_text, 0)
+        item["category"] = response.css(
+            ".breadcrumb li:nth-child(3) a::text").get()
+        item["description"] = response.css(
+            "#product_description + p::text").get()
+        item["upc"] = response.xpath(
+            "//th[text()='UPC']/following-sibling::td[1]/text()").get()
+
+        yield item
